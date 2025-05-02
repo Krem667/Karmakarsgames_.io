@@ -14,7 +14,7 @@
     }
     canvas {
       display: block;
-      background: linear-gradient(to top, #2c003e, #4b0082);
+      background: linear-gradient(to top, #4b0082, #2c003e);
     }
     #info {
       position: fixed;
@@ -128,15 +128,24 @@
     let frame = 0;
 
     function drawBackground() {
-      ctx.fillStyle = "#2c003e";
+      ctx.fillStyle = "#4b0082";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = "white";
+      for (let i = 0; i < 100; i++) {
+        ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1.5, 1.5);
+      }
+
+      // Crescent moon on right
       ctx.fillStyle = "yellow";
       ctx.beginPath();
-      ctx.arc(80, 80, 30, 0.5 * Math.PI, 1.5 * Math.PI);
+      ctx.arc(canvas.width - 80, 80, 30, 0, Math.PI * 2);
       ctx.fill();
-      for (let i = 0; i < 100; i++) {
-        ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
-      }
+      ctx.fillStyle = "#4b0082";
+      ctx.beginPath();
+      ctx.arc(canvas.width - 65, 80, 30, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     function createPipe() {
@@ -152,12 +161,30 @@
     function drawPipes() {
       pipes.forEach(pipe => {
         ctx.fillStyle = "black";
+
+        // Top pipe (building)
+        ctx.beginPath();
+        ctx.moveTo(pipe.x, pipe.top);
+        ctx.lineTo(pipe.x + pipeWidth / 2, pipe.top - 30);
+        ctx.lineTo(pipe.x + pipeWidth, pipe.top);
+        ctx.closePath();
+        ctx.fill();
         ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
+
+        // Bottom pipe (building)
+        ctx.beginPath();
+        ctx.moveTo(pipe.x, pipe.bottom);
+        ctx.lineTo(pipe.x + pipeWidth / 2, pipe.bottom - 30);
+        ctx.lineTo(pipe.x + pipeWidth, pipe.bottom);
+        ctx.closePath();
+        ctx.fill();
         ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
+
+        // Windows (yellow dots)
         ctx.fillStyle = "yellow";
         for (let y = pipe.bottom + 10; y < canvas.height; y += 20) {
-          ctx.fillRect(pipe.x + 10, y, 5, 5);
-          ctx.fillRect(pipe.x + 30, y + 10, 5, 5);
+          ctx.fillRect(pipe.x + 10, y, 4, 4);
+          ctx.fillRect(pipe.x + 30, y + 10, 4, 4);
         }
       });
     }
