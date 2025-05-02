@@ -49,14 +49,23 @@
   <div id="info">Tap or Press Space to Start</div>
   <canvas id="gameCanvas"></canvas>
   <button id="restartBtn">Play Again</button>
+
+  <!-- Background music -->
   <audio id="bgm" loop>
     <source src="your-music.mp3" type="audio/mpeg" />
   </audio>
+
+  <!-- Crash sound -->
+  <audio id="crashSound">
+    <source src="crash.mp3" type="audio/mpeg" />
+  </audio>
+
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     const restartBtn = document.getElementById("restartBtn");
     const bgm = document.getElementById("bgm");
+    const crashSound = document.getElementById("crashSound");
 
     let width = window.innerWidth, height = window.innerHeight;
     canvas.width = width;
@@ -219,6 +228,7 @@
       if (!exploded) {
         exploded = true;
         createExplosion();
+        crashSound.play(); // Play crash sound
         bgm.pause();
         setTimeout(endGame, 1000);
       }
@@ -246,17 +256,7 @@
       restartBtn.style.display = 'none';
       document.getElementById("info").innerText = "";
       bgm.currentTime = 0;
-
-      bgm.play().catch(() => {
-        const resumeBGM = () => {
-          bgm.play();
-          document.body.removeEventListener('click', resumeBGM);
-          document.body.removeEventListener('keydown', resumeBGM);
-        };
-        document.body.addEventListener('click', resumeBGM);
-        document.body.addEventListener('keydown', resumeBGM);
-      });
-
+      bgm.play();
       gameLoop();
     }
 
