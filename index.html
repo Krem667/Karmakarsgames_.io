@@ -83,6 +83,12 @@
 
     let airplaneImg = new Image();
     let selectedSprite = "airplane1.png";
+    let airplaneLoaded = false;
+
+    airplaneImg.onload = () => {
+      airplaneLoaded = true;
+    };
+
     document.getElementById('planeSelect').addEventListener('change', e => {
       selectedSprite = e.target.value;
       airplaneImg.src = selectedSprite;
@@ -104,7 +110,7 @@
       h: 32,
       velocity: 0,
       draw() {
-        if (!gameOver) ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h);
+        if (!gameOver && airplaneLoaded) ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h);
       },
       update() {
         this.velocity += gravity;
@@ -144,14 +150,9 @@
     }
 
     function drawPipes() {
-      ctx.fillStyle = "black";
       pipes.forEach(pipe => {
-        ctx.beginPath();
-        ctx.moveTo(pipe.x, 0);
-        ctx.lineTo(pipe.x + pipeWidth, 0);
-        ctx.lineTo(pipe.x + pipeWidth / 2, pipe.top - 30);
-        ctx.lineTo(pipe.x, 0);
-        ctx.fill();
+        ctx.fillStyle = "black";
+        ctx.fillRect(pipe.x, 0, pipeWidth, pipe.top);
         ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
         ctx.fillStyle = "yellow";
         for (let y = pipe.bottom + 10; y < canvas.height; y += 20) {
@@ -209,7 +210,10 @@
       bird.draw();
       updatePipes();
       frame++;
-      if (!gameOver) requestAnimationFrame(animate);
+      if (!gameOver) {
+        document.getElementById("info").innerText = `Score: ${score}`;
+        requestAnimationFrame(animate);
+      }
     }
 
     document.getElementById("startBtn").addEventListener("click", () => {
