@@ -246,14 +246,24 @@
       restartBtn.style.display = 'none';
       document.getElementById("info").innerText = "";
       bgm.currentTime = 0;
-      bgm.play();
+
+      bgm.play().catch(() => {
+        const resumeBGM = () => {
+          bgm.play();
+          document.body.removeEventListener('click', resumeBGM);
+          document.body.removeEventListener('keydown', resumeBGM);
+        };
+        document.body.addEventListener('click', resumeBGM);
+        document.body.addEventListener('keydown', resumeBGM);
+      });
+
       gameLoop();
     }
 
     function gameLoop() {
       drawNightSky();
       if (!exploded) bird.update();
-      if (!exploded) bird.draw(); // Hide plane when exploded
+      if (!exploded) bird.draw();
       updatePipes();
       drawPipes();
       updateParticles();
