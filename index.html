@@ -1,5 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
@@ -29,266 +28,236 @@
       z-index: 10;
       white-space: pre-line;
     }
-    #restartBtn {
-      display: none;
+    #restartBtn, #startBtn, #soundBtn, #exitBtn {
       position: fixed;
-      bottom: 60px;
       left: 50%;
       transform: translateX(-50%);
       padding: 15px 25px;
-      font-size: 20px;
+      font-size: 18px;
       background: #ff4757;
       color: #fff;
       border: none;
       border-radius: 10px;
       z-index: 20;
+      display: none;
     }
+    #restartBtn { bottom: 60px; }
+    #startBtn { bottom: 140px; display: block; }
+    #soundBtn { bottom: 200px; }
+    #exitBtn { bottom: 260px; }#selector {
+  position: fixed;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  color: white;
+}
+
   </style>
 </head>
 <body>
   <div id="info">Tap or Press Space to Start</div>
+  <div id="selector">
+    <label for="planeSelect">Choose your airplane:</label>
+    <select id="planeSelect">
+      <option value="airplane1.png">Airplane 1</option>
+      <option value="airplane2.png">Airplane 2</option>
+      <option value="airplane3.png">Airplane 3</option>
+    </select>
+  </div>
   <canvas id="gameCanvas"></canvas>
-  <button id="restartBtn">Play Again</button>
-
-  <!-- Background music -->
-  <audio id="bgm" loop>
+  <button id="startBtn">Start Game</button>
+  <button id="soundBtn">Sound: On</button>
+  <button id="exitBtn">Exit Game</button>
+  <button id="restartBtn">Play Again</button>  <audio id="bgm" loop>
     <source src="your-music.mp3" type="audio/mpeg" />
   </audio>
-
-  <!-- Crash sound -->
   <audio id="crashSound">
     <source src="crash.mp3" type="audio/mpeg" />
-  </audio>
-
-  <script>
+  </audio>  <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
-    const restartBtn = document.getElementById("restartBtn");
-    const bgm = document.getElementById("bgm");
-    const crashSound = document.getElementById("crashSound");
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    let width = window.innerWidth, height = window.innerHeight;
-    canvas.width = width;
-    canvas.height = height;
+    let airplaneImg = new Image();
+    let selectedSprite = "airplane1.png";
+    document.getElementById('planeSelect').addEventListener('change', e => {
+      selectedSprite = e.target.value;
+      airplaneImg.src = selectedSprite;
+    });
+    airplaneImg.src = selectedSprite;
 
-    let frames = 0, score = 0;
-    let highScore = localStorage.getItem("skyFlightHighScore") || 0;
-    let gameStarted = false, gameOver = false, exploded = false;
-
-    const GRAVITY = 0.25 * (height / 600);
-    const FLAP = -5 * (height / 600);
-
-    const stars = Array.from({ length: 100 }, () => ({
-      x: Math.random() * width,
-      y: Math.random() * height / 2,
-      r: Math.random() * 2 + 1
-    }));
-
-    const particles = [];
+    const gravity = 0.6;
+    const lift = -10;
+    let gameStarted = false;
+    let gameOver = false;
+    let score = 0;
+    let highScore = 0;
+    let soundOn = true;
 
     const bird = {
-      x: width / 4,
-      y: height / 2,
-      w: 36,
-      h: 18,
+      x: 150,
+      y: 200,
+      w: 64,
+      h: 32,
       velocity: 0,
       draw() {
-        ctx.fillStyle = "#c0c0c0";
-        ctx.fillRect(this.x, this.y + 6, 36, 6); // body
-        ctx.fillStyle = "#ff0000";
-        ctx.fillRect(this.x + 4, this.y + 2, 8, 4); // top wing
-        ctx.fillRect(this.x + 4, this.y + 12, 8, 4); // bottom wing
-        ctx.fillStyle = "#000";
-        ctx.fillRect(this.x + 28, this.y + 4, 4, 10); // nose
+        if (!gameOver) {
+          ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h);
+        }
       },
       update() {
-        this.velocity += GRAVITY;
+        this.velocity += gravity;
         this.y += this.velocity;
-        if (this.y + this.h > height || this.y < 0) triggerExplosion();
+        if (this.y + this.h > canvas.height || this.y < 0) crash();
       },
       flap() {
-        this.velocity = FLAP;
-      },
-      reset() {
-        this.y = height / 2;
-        this.velocity = 0;
+        this.velocity = lift;
       }
     };
 
     const pipes = [];
+    const pipeWidth = 80;
+    const gap = 200;
+    let frame = 0;
+
+    function drawBackground() {
+      ctx.fillStyle = "#2c003e";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "yellow";
+      ctx.beginPath();
+      ctx.arc(80, 80, 30, 0.5 * Math.PI, 1.5 * Math.PI);
+      ctx.fill();
+      for (let i = 0; i < 100; i++) {
+        ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
+      }
+    }
+
     function createPipe() {
-      const gap = 140;
-      const topHeight = Math.floor(Math.random() * (height / 2)) + 50;
+      const topHeight = Math.random() * (canvas.height - gap - 100) + 50;
       pipes.push({
-        x: width,
+        x: canvas.width,
         top: topHeight,
-        bottom: height - topHeight - gap,
+        bottom: topHeight + gap,
         passed: false
       });
     }
 
-    function drawNightSky() {
-      ctx.fillStyle = "#4b0082";
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = "#fff";
-      stars.forEach(s => {
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
-      });
-      ctx.beginPath();
-      ctx.arc(width - 80, 80, 30, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffff99";
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(width - 70, 80, 30, 0, Math.PI * 2);
-      ctx.fillStyle = "#4b0082";
-      ctx.fill();
-    }
-
-    function drawBuilding(x, y, w, h) {
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x + w / 2, y - 20);
-      ctx.lineTo(x + w, y);
-      ctx.lineTo(x + w, y + h);
-      ctx.lineTo(x, y + h);
-      ctx.closePath();
-      ctx.fill();
-      for (let i = y + 5; i < y + h - 5; i += 10) {
-        for (let j = x + 5; j < x + w - 5; j += 10) {
-          if (Math.random() < 0.4) {
-            ctx.fillStyle = "#ffff66";
-            ctx.fillRect(j, i, 3, 3);
-          }
-        }
-      }
-    }
-
     function drawPipes() {
+      ctx.fillStyle = "black";
       pipes.forEach(pipe => {
-        drawBuilding(pipe.x, 0, 50, pipe.top);
-        drawBuilding(pipe.x, height - pipe.bottom, 50, pipe.bottom);
+        ctx.beginPath();
+        ctx.moveTo(pipe.x, 0);
+        ctx.lineTo(pipe.x + pipeWidth, 0);
+        ctx.lineTo(pipe.x + pipeWidth / 2, pipe.top - 30);
+        ctx.lineTo(pipe.x, 0);
+        ctx.fill();
+        ctx.fillRect(pipe.x, pipe.bottom, pipeWidth, canvas.height - pipe.bottom);
+        ctx.fillStyle = "yellow";
+        for (let y = pipe.bottom + 10; y < canvas.height; y += 20) {
+          ctx.fillRect(pipe.x + 10, y, 5, 5);
+          ctx.fillRect(pipe.x + 30, y + 10, 5, 5);
+        }
       });
     }
 
     function updatePipes() {
       pipes.forEach(pipe => {
-        pipe.x -= 2;
-        if (
-          bird.x < pipe.x + 50 &&
-          bird.x + bird.w > pipe.x &&
-          (bird.y < pipe.top || bird.y + bird.h > height - pipe.bottom)
-        ) {
-          triggerExplosion();
-        }
-        if (!pipe.passed && pipe.x + 50 < bird.x) {
+        pipe.x -= 3;
+        if (!pipe.passed && pipe.x + pipeWidth < bird.x) {
           score++;
           pipe.passed = true;
         }
+        if (
+          bird.x < pipe.x + pipeWidth &&
+          bird.x + bird.w > pipe.x &&
+          (bird.y < pipe.top || bird.y + bird.h > pipe.bottom)
+        ) {
+          crash();
+        }
       });
-      if (frames % 100 === 0) createPipe();
-      if (pipes.length && pipes[0].x < -50) pipes.shift();
+      if (frame % 100 === 0) createPipe();
     }
 
-    function createExplosion() {
-      for (let i = 0; i < 40; i++) {
-        particles.push({
-          x: bird.x + bird.w / 2,
-          y: bird.y + bird.h / 2,
-          vx: (Math.random() - 0.5) * 6,
-          vy: (Math.random() - 0.5) * 6,
-          size: 4,
-          color: ["#ff0", "#f00", "#ffa500"][Math.floor(Math.random() * 3)],
-          life: 60
-        });
-      }
-    }
-
-    function updateParticles() {
-      particles.forEach(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life--;
-      });
-      for (let i = particles.length - 1; i >= 0; i--) {
-        if (particles[i].life <= 0) particles.splice(i, 1);
-      }
-    }
-
-    function drawParticles() {
-      particles.forEach(p => {
-        ctx.fillStyle = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-      });
-    }
-
-    function triggerExplosion() {
-      if (!exploded) {
-        exploded = true;
-        createExplosion();
-        crashSound.play(); // Play crash sound
-        bgm.pause();
-        setTimeout(endGame, 1000);
-      }
-    }
-
-    function endGame() {
+    function crash() {
       gameOver = true;
-      if (score > highScore) {
-        highScore = score;
-        localStorage.setItem("skyFlightHighScore", highScore);
-      }
-      document.getElementById("info").innerText =
-        `Game Over!\nYour Score: ${score}\nHigh Score: ${highScore}`;
-      restartBtn.style.display = 'block';
+      document.getElementById("restartBtn").style.display = "block";
+      document.getElementById("info").innerText = `Game Over\nScore: ${score}\nHigh Score: ${highScore}`;
+      document.getElementById("bgm").pause();
+      if (soundOn) document.getElementById("crashSound").play();
     }
 
-    function resetGame() {
-      gameStarted = true;
-      gameOver = false;
-      score = 0;
-      exploded = false;
-      bird.reset();
+    function reset() {
       pipes.length = 0;
-      particles.length = 0;
-      restartBtn.style.display = 'none';
+      bird.y = 200;
+      bird.velocity = 0;
+      score = 0;
+      frame = 0;
+      gameOver = false;
+      document.getElementById("restartBtn").style.display = "none";
       document.getElementById("info").innerText = "";
-      bgm.currentTime = 0;
-      bgm.play();
-      gameLoop();
+      airplaneImg.src = selectedSprite;
+      if (soundOn) document.getElementById("bgm").play();
     }
 
-    function gameLoop() {
-      drawNightSky();
-      if (!exploded) bird.update();
-      if (!exploded) bird.draw();
-      updatePipes();
+    function animate() {
+      if (!gameStarted) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
       drawPipes();
-      updateParticles();
-      drawParticles();
-      ctx.fillStyle = "#fff";
-      ctx.font = "20px monospace";
-      ctx.fillText(`Score: ${score}`, 10, 30);
-      frames++;
-      if (!gameOver) requestAnimationFrame(gameLoop);
+      bird.update();
+      bird.draw();
+      updatePipes();
+      frame++;
+      if (!gameOver) requestAnimationFrame(animate);
     }
 
-    function onFlap() {
-      if (!gameStarted || gameOver) {
-        resetGame();
-      } else {
-        bird.flap();
+    document.getElementById("startBtn").addEventListener("click", () => {
+      document.getElementById("info").innerText = "Starting in 5...";
+      let countdown = 5;
+      const interval = setInterval(() => {
+        countdown--;
+        document.getElementById("info").innerText = `Starting in ${countdown}...`;
+        if (countdown === 0) {
+          clearInterval(interval);
+          document.getElementById("startBtn").style.display = "none";
+          document.getElementById("soundBtn").style.display = "none";
+          document.getElementById("exitBtn").style.display = "none";
+          document.getElementById("info").innerText = "";
+          gameStarted = true;
+          if (soundOn) document.getElementById("bgm").play();
+          animate();
+        }
+      }, 1000);
+    });
+
+    document.getElementById("soundBtn").addEventListener("click", () => {
+      soundOn = !soundOn;
+      document.getElementById("soundBtn").innerText = `Sound: ${soundOn ? "On" : "Off"}`;
+      const bgm = document.getElementById("bgm");
+      if (soundOn) bgm.play();
+      else bgm.pause();
+    });
+
+    document.getElementById("exitBtn").addEventListener("click", () => {
+      location.reload();
+    });
+
+    window.addEventListener("keydown", e => {
+      if (e.code === "Space") {
+        if (!gameOver && gameStarted) bird.flap();
       }
-    }
+    });
 
-    document.addEventListener("keydown", e => { if (e.code === "Space") onFlap(); });
-    document.addEventListener("touchstart", onFlap);
-    restartBtn.addEventListener("click", resetGame);
+    canvas.addEventListener("touchstart", () => {
+      if (!gameOver && gameStarted) bird.flap();
+    });
 
-    drawNightSky();
-    bird.draw();
-  </script>
-</body>
+    document.getElementById("restartBtn").addEventListener("click", () => {
+      highScore = Math.max(score, highScore);
+      reset();
+      animate();
+    });
+  </script></body>
 </html>
