@@ -44,15 +44,16 @@
     #restartBtn { bottom: 60px; }
     #startBtn { bottom: 140px; display: block; }
     #soundBtn { bottom: 200px; }
-    #exitBtn { bottom: 260px; }#selector {
-  position: fixed;
-  top: 50px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 10;
-  color: white;
-}
-
+    #exitBtn { bottom: 260px; }
+    #selector {
+      position: fixed;
+      top: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      color: white;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -103,9 +104,7 @@
       h: 32,
       velocity: 0,
       draw() {
-        if (!gameOver) {
-          ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h);
-        }
+        if (!gameOver) ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h);
       },
       update() {
         this.velocity += gravity;
@@ -215,6 +214,7 @@
 
     document.getElementById("startBtn").addEventListener("click", () => {
       document.getElementById("info").innerText = "Starting in 5...";
+      document.getElementById("selector").style.display = "none";
       let countdown = 5;
       const interval = setInterval(() => {
         countdown--;
@@ -227,6 +227,7 @@
           document.getElementById("info").innerText = "";
           gameStarted = true;
           if (soundOn) document.getElementById("bgm").play();
+          reset();
           animate();
         }
       }, 1000);
