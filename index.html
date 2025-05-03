@@ -67,9 +67,6 @@
     const bgm = document.getElementById("bgm");
     const crashSound = document.getElementById("crashSound");
 
-    const airplaneImg = new Image(); // ADDED
-    airplaneImg.src = "airplane.png"; // REPLACE with your sprite path
-
     let width = window.innerWidth, height = window.innerHeight;
     canvas.width = width;
     canvas.height = height;
@@ -96,18 +93,13 @@
       h: 18,
       velocity: 0,
       draw() {
-        ctx.drawImage(airplaneImg, this.x, this.y, this.w, this.h); // ADDED
-
-        // Keep original design as fallback or comment these out
-        /*
         ctx.fillStyle = "#c0c0c0";
-        ctx.fillRect(this.x, this.y + 6, 36, 6);
+        ctx.fillRect(this.x, this.y + 6, 36, 6); // body
         ctx.fillStyle = "#ff0000";
-        ctx.fillRect(this.x + 4, this.y + 2, 8, 4);
-        ctx.fillRect(this.x + 4, this.y + 12, 8, 4);
+        ctx.fillRect(this.x + 4, this.y + 2, 8, 4); // top wing
+        ctx.fillRect(this.x + 4, this.y + 12, 8, 4); // bottom wing
         ctx.fillStyle = "#000";
-        ctx.fillRect(this.x + 28, this.y + 4, 4, 10);
-        */
+        ctx.fillRect(this.x + 28, this.y + 4, 4, 10); // nose
       },
       update() {
         this.velocity += GRAVITY;
@@ -123,7 +115,180 @@
       }
     };
 
-    // ... rest of your code remains unchanged ...
+    const pipes = [];
+    function createPipe() {
+      const gap = 140;
+      const topHeight = Math.floor(Math.random() * (height / 2)) + 50;
+      pipes.push({
+        x: width,
+        top: topHeight,
+        bottom: height - topHeight - gap,
+        passed: false
+      });
+    }
+
+    function drawNightSky() {
+      ctx.fillStyle = "#4b0082";
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = "#fff";
+      stars.forEach(s => {
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.beginPath();
+      ctx.arc(width - 80, 80, 30, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffff99";
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(width - 70, 80, 30, 0, Math.PI * 2);
+      ctx.fillStyle = "#4b0082";
+      ctx.fill();
+    }
+
+    function drawBuilding(x, y, w, h) {
+      ctx.fillStyle = "#000";
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + w / 2, y - 20);
+      ctx.lineTo(x + w, y);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.closePath();
+      ctx.fill();
+      for (let i = y + 5; i < y + h - 5; i += 10) {
+        for (let j = x + 5; j < x + w - 5; j += 10) {
+          if (Math.random() < 0.4) {
+            ctx.fillStyle = "#ffff66";
+            ctx.fillRect(j, i, 3, 3);
+          }
+        }
+      }
+    }
+
+    function drawPipes() {
+      pipes.forEach(pipe => {
+        drawBuilding(pipe.x, 0, 50, pipe.top);
+        drawBuilding(pipe.x, height - pipe.bottom, 50, pipe.bottom);
+      });
+    }
+
+    function updatePipes() {
+      pipes.forEach(pipe => {
+        pipe.x -= 2;
+        if (
+          bird.x < pipe.x + 50 &&
+          bird.x + bird.w > pipe.x &&
+          (bird.y < pipe.top || bird.y + bird.h > height - pipe.bottom)
+        ) {
+          triggerExplosion();
+        }
+        if (!pipe.passed && pipe.x + 50 < bird.x) {
+          score++;
+          pipe.passed = true;
+        }
+      });
+      if (frames % 100 === 0) createPipe();
+      if (pipes.length && pipes[0].x < -50) pipes.shift();
+    }
+
+    function createExplosion() {
+      for (let i = 0; i < 40; i++) {
+        particles.push({
+          x: bird.x + bird.w / 2,
+          y: bird.y + bird.h / 2,
+          vx: (Math.random() - 0.5) * 6,
+          vy: (Math.random() - 0.5) * 6,
+          size: 4,
+          color: ["#ff0", "#f00", "#ffa500"][Math.floor(Math.random() * 3)],
+          life: 60
+        });
+      }
+    }
+
+    function updateParticles() {
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+      });
+      for (let i = particles.length - 1; i >= 0; i--) {
+        if (particles[i].life <= 0) particles.splice(i, 1);
+      }
+    }
+
+    function drawParticles() {
+      particles.forEach(p => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      });
+    }
+
+    function triggerExplosion() {
+      if (!exploded) {
+        exploded = true;
+        createExplosion();
+        crashSound.play(); // Play crash sound
+        bgm.pause();
+        setTimeout(endGame, 1000);
+      }
+    }
+
+    function endGame() {
+      gameOver = true;
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem("skyFlightHighScore", highScore);
+      }
+      document.getElementById("info").innerText =
+        `Game Over!\nYour Score: ${score}\nHigh Score: ${highScore}`;
+      restartBtn.style.display = 'block';
+    }
+
+    function resetGame() {
+      gameStarted = true;
+      gameOver = false;
+      score = 0;
+      exploded = false;
+      bird.reset();
+      pipes.length = 0;
+      particles.length = 0;
+      restartBtn.style.display = 'none';
+      document.getElementById("info").innerText = "";
+      bgm.currentTime = 0;
+      bgm.play();
+      gameLoop();
+    }
+
+    function gameLoop() {
+      drawNightSky();
+      if (!exploded) bird.update();
+      if (!exploded) bird.draw();
+      updatePipes();
+      drawPipes();
+      updateParticles();
+      drawParticles();
+      ctx.fillStyle = "#fff";
+      ctx.font = "20px monospace";
+      ctx.fillText(`Score: ${score}`, 10, 30);
+      frames++;
+      if (!gameOver) requestAnimationFrame(gameLoop);
+    }
+
+    function onFlap() {
+      if (!gameStarted || gameOver) {
+        resetGame();
+      } else {
+        bird.flap();
+      }
+    }
+
+    document.addEventListener("keydown", e => { if (e.code === "Space") onFlap(); });
+    document.addEventListener("touchstart", onFlap);
+    restartBtn.addEventListener("click", resetGame);
+
+    drawNightSky();
+    bird.draw();
   </script>
 </body>
 </html>
