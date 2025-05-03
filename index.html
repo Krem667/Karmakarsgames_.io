@@ -1,234 +1,138 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Dodge the Buildings</title>
+  <title>Airplane Game</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    canvas { display: block; background: #2e0057; }
-    body { font-family: monospace; text-align: center; overflow: hidden; }
-    #ui {
-      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-      display: flex; flex-direction: column; gap: 10px;
-    }
-    .button {
-      padding: 10px 20px;
-      font-size: 18px;
-      background-color: #ff4d4d;
-      border: none;
-      color: white;
-      border-radius: 8px;
-      cursor: pointer;
-    }
-    #selectPlane, #startBtn, #soundBtn, #exitBtn {
+    canvas {
       display: block;
+      margin: 0 auto;
+      background: linear-gradient(to bottom, #4B0082, #2E0854);
     }
-    #gameOverText {
-      position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-      color: white; font-size: 24px; display: none;
-    }
-    #explosion {
-      position: absolute;
-      width: 100px; height: 100px;
-      display: none;
-      pointer-events: none;
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: monospace;
+      color: white;
+      background-color: black;
     }
   </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="360" height="640"></canvas>
+<canvas id="gameCanvas" width="400" height="600"></canvas>
+<script>
+  const canvas = document.getElementById("gameCanvas");
+  const ctx = canvas.getContext("2d");let plane = { x: 50, y: 300, width: 50, height: 40, vy: 0 }; let buildings = []; let score = 0; let highScore = 0; let gameOver = false; let gameStarted = false; let waitingToStart = false; let bgm, crashSound;
 
-  <div id="ui">
-    <button id="startBtn" class="button">Start</button>
-    <select id="selectPlane">
-      <option value="airplane1.png">Green Plane</option>
-    </select>
-    <button id="soundBtn" class="button">Sound: ON</button>
-    <button id="exitBtn" class="button">Exit</button>
-  </div>
+const planeImg = new Image(); planeImg.src = "airplane1.png";
 
-  <div id="gameOverText">Game Over<br>Score: <span id="score">0</span> | High Score: <span id="highScore">0</span><br>
-    <button class="button" onclick="location.reload()">Play Again</button>
-  </div>
+const explosionGif = new Image(); explosionGif.src = "explosion.gif";
 
-  <img id="explosion" src="explosion.gif" />
+function playSound(file) { const sound = new Audio(file); sound.play(); }
 
-  <audio id="bgm" src="bgm.mp3" loop></audio>
-  <audio id="crash" src="crash.mp3"></audio>
+function startGame() { resetGame(); waitingToStart = true; playSound("bgm.mp3"); setTimeout(() => { waitingToStart = false; gameStarted = true; }, 5000); }
 
-  <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
+function resetGame() { plane = { x: 50, y: 300, width: 50, height: 40, vy: 0 }; buildings = []; score = 0; gameOver = false; gameStarted = false; }
 
-    const startBtn = document.getElementById("startBtn");
-    const selectPlane = document.getElementById("selectPlane");
-    const soundBtn = document.getElementById("soundBtn");
-    const explosionImg = document.getElementById("explosion");
-    const gameOverText = document.getElementById("gameOverText");
+function update() { if (gameOver) return;
 
-    const bgm = document.getElementById("bgm");
-    const crash = document.getElementById("crash");
+if (!waitingToStart && gameStarted) {
+  plane.vy += 0.5;
+  plane.y += plane.vy;
 
-    let planeImg = new Image();
-    let plane = { x: 80, y: 200, width: 40, height: 30, vy: 0 };
+  if (plane.y + plane.height > canvas.height || plane.y < 0) {
+    triggerGameOver();
+  }
 
-    let buildings = [];
-    let stars = [];
-    let moon = { x: 300, y: 40 };
+  buildings.forEach(b => b.x -= 2);
+  buildings = buildings.filter(b => b.x + b.width > 0);
 
-    let score = 0;
-    let highScore = 0;
-    let gameStarted = false;
-    let gameOver = false;
-    let soundOn = true;
-
-    selectPlane.onchange = () => {
-      planeImg.src = selectPlane.value;
-    };
-
-    planeImg.src = selectPlane.value;
-
-    function drawBackground() {
-      ctx.fillStyle = "#2e0057";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Stars
-      ctx.fillStyle = "white";
-      stars.forEach(s => ctx.fillRect(s.x, s.y, 2, 2));
-
-      // Crescent Moon
-      ctx.beginPath();
-      ctx.arc(moon.x, moon.y, 20, 0, Math.PI * 2);
-      ctx.fillStyle = "yellow";
-      ctx.fill();
-      ctx.globalCompositeOperation = "destination-out";
-      ctx.beginPath();
-      ctx.arc(moon.x + 8, moon.y, 20, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalCompositeOperation = "source-over";
-    }
-
-    function drawBuildings() {
-      ctx.fillStyle = "black";
-      buildings.forEach(b => {
-        ctx.beginPath();
-        ctx.moveTo(b.x, b.y + b.height);
-        ctx.lineTo(b.x + b.width / 2, b.y);
-        ctx.lineTo(b.x + b.width, b.y + b.height);
-        ctx.closePath();
-        ctx.fill();
-
-        // Windows
-        ctx.fillStyle = "yellow";
-        for (let wy = b.y + 10; wy < b.y + b.height - 10; wy += 12) {
-          ctx.fillRect(b.x + b.width / 2 - 2, wy, 4, 4);
-        }
-        ctx.fillStyle = "black";
-      });
-    }
-
-    function drawPlane() {
-      ctx.drawImage(planeImg, plane.x, plane.y, plane.width, plane.height);
-    }
-
-    function resetGame() {
-      plane.y = 200;
-      plane.vy = 0;
-      buildings = [];
-      stars = [];
-      for (let i = 0; i < 50; i++) stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height });
-      score = 0;
-      gameOver = false;
-      gameOverText.style.display = "none";
-      explosionImg.style.display = "none";
-    }
-
-    function startGame() {
-      resetGame();
-      setTimeout(() => gameStarted = true, 5000);
-    }
-
-    function update() {
-      if (!gameStarted || gameOver) return;
-
-      // Gravity
-      plane.vy += 0.5;
-      plane.y += plane.vy;
-
-      // Buildings
-      if (Math.random() < 0.02) {
-        const height = Math.floor(Math.random() * 200 + 100);
-        buildings.push({ x: canvas.width, y: canvas.height - height, width: 50, height: height });
-      }
-
-      buildings.forEach(b => b.x -= 2);
-      buildings = buildings.filter(b => b.x + b.width > 0);
-
-      buildings.forEach(b => {
-        if (
-          plane.x < b.x + b.width &&
-          plane.x + plane.width > b.x &&
-          plane.y + plane.height > b.y
-        ) {
-          // Collision
-          gameOver = true;
-          gameStarted = false;
-          if (soundOn) crash.play();
-          explosionImg.style.left = plane.x + "px";
-          explosionImg.style.top = plane.y + "px";
-          explosionImg.style.display = "block";
-          gameOverText.style.display = "block";
-          document.getElementById("score").textContent = score;
-          highScore = Math.max(highScore, score);
-          document.getElementById("highScore").textContent = highScore;
-        }
-      });
-
-      // Scoring
-      score++;
-    }
-
-    function render() {
-      drawBackground();
-      drawBuildings();
-      if (!gameOver) drawPlane();
-    }
-
-    function loop() {
-      update();
-      render();
-      requestAnimationFrame(loop);
-    }
-
-    document.addEventListener("keydown", () => {
-      if (gameStarted && !gameOver) plane.vy = -8;
+  if (Math.random() < 0.02) {
+    const height = Math.floor(Math.random() * 200 + 100);
+    buildings.push({
+      x: canvas.width,
+      y: canvas.height - height,
+      width: 50,
+      height: height
     });
+  }
 
-    canvas.addEventListener("touchstart", () => {
-      if (gameStarted && !gameOver) plane.vy = -8;
-    });
+  buildings.forEach(b => {
+    if (
+      plane.x < b.x + b.width &&
+      plane.x + plane.width > b.x &&
+      plane.y < b.y + b.height &&
+      plane.y + plane.height > b.y
+    ) {
+      triggerGameOver();
+    }
+  });
 
-    startBtn.onclick = () => {
-      bgm.play();
-      startGame();
-      document.getElementById("ui").style.display = "none";
-    };
+  score++;
+  if (score > highScore) highScore = score;
+}
 
-    soundBtn.onclick = () => {
-      soundOn = !soundOn;
-      bgm.muted = !soundOn;
-      crash.muted = !soundOn;
-      soundBtn.textContent = "Sound: " + (soundOn ? "ON" : "OFF");
-    };
+}
 
-    exitBtn.onclick = () => {
-      alert("Thanks for playing!");
-    };
+function draw() { ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    window.onload = () => {
-      loop();
-    };
-  </script>
+// Sky background
+ctx.fillStyle = "#4B0082";
+ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+// Stars
+ctx.fillStyle = "white";
+for (let i = 0; i < 100; i++) {
+  ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 1, 1);
+}
+
+// Moon
+ctx.fillStyle = "yellow";
+ctx.beginPath();
+ctx.arc(canvas.width - 30, 50, 20, 0, Math.PI * 2);
+ctx.fill();
+ctx.fillStyle = "#4B0082";
+ctx.beginPath();
+ctx.arc(canvas.width - 22, 50, 20, 0, Math.PI * 2);
+ctx.fill();
+
+drawBuildings();
+
+if (!gameOver) {
+  ctx.drawImage(planeImg, plane.x, plane.y, plane.width, plane.height);
+} else {
+  ctx.drawImage(explosionGif, plane.x, plane.y, 50, 50);
+}
+
+ctx.fillStyle = "white";
+ctx.fillText("Score: " + Math.floor(score / 10) + " | High Score: " + Math.floor(highScore / 10), 10, 20);
+
+}
+
+function drawBuildings() { buildings.forEach(b => { // Building body ctx.fillStyle = "black"; ctx.fillRect(b.x, b.y, b.width, b.height);
+
+// Triangle roof
+  ctx.beginPath();
+  ctx.moveTo(b.x, b.y);
+  ctx.lineTo(b.x + b.width / 2, b.y - 20);
+  ctx.lineTo(b.x + b.width, b.y);
+  ctx.closePath();
+  ctx.fill();
+
+  // Windows
+  ctx.fillStyle = "yellow";
+  for (let wy = b.y + 10; wy < b.y + b.height - 10; wy += 12) {
+    ctx.fillRect(b.x + b.width / 2 - 2, wy, 4, 4);
+  }
+});
+
+}
+
+function triggerGameOver() { gameOver = true; gameStarted = false; playSound("crash.mp3"); }
+
+function loop() { update(); draw(); requestAnimationFrame(loop); }
+
+document.addEventListener("keydown", e => { if (e.code === "Space") { if (!gameStarted && !waitingToStart) { startGame(); } if (!gameOver) { plane.vy = -8; } } });
+
+loop(); </script>
+
 </body>
 </html>
