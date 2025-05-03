@@ -5,253 +5,230 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Dodge the Buildings</title>
   <style>
-    html, body {
-      margin: 0;
-      overflow: hidden;
-      font-family: monospace;
-      background: linear-gradient(to bottom, #3c0066, #220033);
-      color: white;
-    }
-    canvas {
-      display: block;
-      background: transparent;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    canvas { display: block; background: #2e0057; }
+    body { font-family: monospace; text-align: center; overflow: hidden; }
     #ui {
-      position: absolute;
-      width: 100%;
-      top: 0;
-      text-align: center;
-      z-index: 10;
-      color: white;
+      position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; gap: 10px;
     }
-    #startScreen, #gameOverScreen {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.8);
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      z-index: 20;
-    }
-    button, select {
-      padding: 10px;
+    .button {
+      padding: 10px 20px;
       font-size: 18px;
-      margin: 10px;
-      border-radius: 10px;
+      background-color: #ff4d4d;
       border: none;
+      color: white;
+      border-radius: 8px;
+      cursor: pointer;
     }
-    #scoreBoard {
+    #selectPlane, #startBtn, #soundBtn, #exitBtn {
+      display: block;
+    }
+    #gameOverText {
+      position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+      color: white; font-size: 24px; display: none;
+    }
+    #explosion {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      font-size: 20px;
+      width: 100px; height: 100px;
+      display: none;
+      pointer-events: none;
     }
   </style>
 </head>
 <body>
+  <canvas id="gameCanvas" width="360" height="640"></canvas>
+
   <div id="ui">
-    <div id="scoreBoard">Score: 0 | High Score: 0</div>
-  </div>
-
-  <div id="startScreen">
-    <h1>Dodge the Buildings</h1>
-    <label for="planeSelect">Choose Your Plane:</label>
-    <select id="planeSelect">
-      <option value="plane1.png">Green Plane</option>
-      <option value="plane2.png">Red Plane</option>
+    <button id="startBtn" class="button">Start</button>
+    <select id="selectPlane">
+      <option value="airplane1.png">Green Plane</option>
     </select>
-    <button id="startBtn">Start Game</button>
-    <button id="toggleSound">Toggle Sound</button>
-    <button onclick="window.close()">Exit</button>
+    <button id="soundBtn" class="button">Sound: ON</button>
+    <button id="exitBtn" class="button">Exit</button>
   </div>
 
-  <div id="gameOverScreen" style="display:none;">
-    <h1>Game Over</h1>
-    <p id="finalScore"></p>
-    <button onclick="location.reload()">Play Again</button>
+  <div id="gameOverText">Game Over<br>Score: <span id="score">0</span> | High Score: <span id="highScore">0</span><br>
+    <button class="button" onclick="location.reload()">Play Again</button>
   </div>
 
-  <canvas id="gameCanvas" width="480" height="640"></canvas>
+  <img id="explosion" src="explosion.gif" />
 
   <audio id="bgm" src="bgm.mp3" loop></audio>
-  <audio id="crashSound" src="crash.mp3"></audio>
+  <audio id="crash" src="crash.mp3"></audio>
 
   <script>
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    let bird = { x: 100, y: 150, width: 40, height: 30, velocity: 0 };
-    let gravity = 0.6;
-    let lift = -10;
-    let pipes = [];
-    let score = 0;
-    let highScore = localStorage.getItem("highScore") || 0;
-    let planeImg = new Image();
-    let planeSelected = "plane1.png";
-    let crashed = false;
-    let explosion = new Image();
-    explosion.src = "explosion.gif";
-    let showExplosion = false;
-    let explosionTimer = 0;
+    const startBtn = document.getElementById("startBtn");
+    const selectPlane = document.getElementById("selectPlane");
+    const soundBtn = document.getElementById("soundBtn");
+    const explosionImg = document.getElementById("explosion");
+    const gameOverText = document.getElementById("gameOverText");
 
     const bgm = document.getElementById("bgm");
-    const crashSound = document.getElementById("crashSound");
+    const crash = document.getElementById("crash");
 
-    function drawSky() {
-      ctx.fillStyle = "#3c0066";
+    let planeImg = new Image();
+    let plane = { x: 80, y: 200, width: 40, height: 30, vy: 0 };
+
+    let buildings = [];
+    let stars = [];
+    let moon = { x: 300, y: 40 };
+
+    let score = 0;
+    let highScore = 0;
+    let gameStarted = false;
+    let gameOver = false;
+    let soundOn = true;
+
+    selectPlane.onchange = () => {
+      planeImg.src = selectPlane.value;
+    };
+
+    planeImg.src = selectPlane.value;
+
+    function drawBackground() {
+      ctx.fillStyle = "#2e0057";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Stars
+      ctx.fillStyle = "white";
+      stars.forEach(s => ctx.fillRect(s.x, s.y, 2, 2));
 
       // Crescent Moon
       ctx.beginPath();
-      ctx.arc(420, 80, 25, 0, Math.PI * 2, false);
+      ctx.arc(moon.x, moon.y, 20, 0, Math.PI * 2);
       ctx.fillStyle = "yellow";
       ctx.fill();
-      ctx.globalCompositeOperation = 'destination-out';
+      ctx.globalCompositeOperation = "destination-out";
       ctx.beginPath();
-      ctx.arc(430, 80, 25, 0, Math.PI * 2, false);
+      ctx.arc(moon.x + 8, moon.y, 20, 0, Math.PI * 2);
       ctx.fill();
-      ctx.globalCompositeOperation = 'source-over';
-
-      // Stars
-      for (let i = 0; i < 40; i++) {
-        ctx.fillStyle = "white";
-        ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 2, 2);
-      }
-    }
-
-    function drawPlane() {
-      if (!showExplosion) ctx.drawImage(planeImg, bird.x, bird.y, bird.width, bird.height);
-    }
-
-    function drawExplosion() {
-      if (showExplosion) {
-        ctx.drawImage(explosion, bird.x - 15, bird.y - 15, 60, 60);
-        explosionTimer++;
-        if (explosionTimer > 20) document.getElementById("gameOverScreen").style.display = "flex";
-      }
+      ctx.globalCompositeOperation = "source-over";
     }
 
     function drawBuildings() {
       ctx.fillStyle = "black";
-      pipes.forEach(pipe => {
-        // Rectangle base
-        ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
-        ctx.fillRect(pipe.x, pipe.bottom, pipe.width, canvas.height - pipe.bottom);
-
-        // Triangle top
+      buildings.forEach(b => {
         ctx.beginPath();
-        ctx.moveTo(pipe.x, pipe.top);
-        ctx.lineTo(pipe.x + pipe.width / 2, pipe.top - 20);
-        ctx.lineTo(pipe.x + pipe.width, pipe.top);
+        ctx.moveTo(b.x, b.y + b.height);
+        ctx.lineTo(b.x + b.width / 2, b.y);
+        ctx.lineTo(b.x + b.width, b.y + b.height);
+        ctx.closePath();
         ctx.fill();
 
         // Windows
-        for (let y = 10; y < pipe.top; y += 15) {
-          ctx.fillStyle = "yellow";
-          ctx.fillRect(pipe.x + 5, y, 3, 3);
+        ctx.fillStyle = "yellow";
+        for (let wy = b.y + 10; wy < b.y + b.height - 10; wy += 12) {
+          ctx.fillRect(b.x + b.width / 2 - 2, wy, 4, 4);
         }
-        for (let y = pipe.bottom + 10; y < canvas.height; y += 15) {
-          ctx.fillStyle = "yellow";
-          ctx.fillRect(pipe.x + 5, y, 3, 3);
-        }
+        ctx.fillStyle = "black";
       });
+    }
+
+    function drawPlane() {
+      ctx.drawImage(planeImg, plane.x, plane.y, plane.width, plane.height);
+    }
+
+    function resetGame() {
+      plane.y = 200;
+      plane.vy = 0;
+      buildings = [];
+      stars = [];
+      for (let i = 0; i < 50; i++) stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height });
+      score = 0;
+      gameOver = false;
+      gameOverText.style.display = "none";
+      explosionImg.style.display = "none";
+    }
+
+    function startGame() {
+      resetGame();
+      setTimeout(() => gameStarted = true, 5000);
     }
 
     function update() {
-      if (crashed) return;
+      if (!gameStarted || gameOver) return;
 
-      bird.velocity += gravity;
-      bird.y += bird.velocity;
+      // Gravity
+      plane.vy += 0.5;
+      plane.y += plane.vy;
 
-      pipes.forEach(pipe => {
-        pipe.x -= 2;
+      // Buildings
+      if (Math.random() < 0.02) {
+        const height = Math.floor(Math.random() * 200 + 100);
+        buildings.push({ x: canvas.width, y: canvas.height - height, width: 50, height: height });
+      }
 
-        // Collision
+      buildings.forEach(b => b.x -= 2);
+      buildings = buildings.filter(b => b.x + b.width > 0);
+
+      buildings.forEach(b => {
         if (
-          bird.x < pipe.x + pipe.width &&
-          bird.x + bird.width > pipe.x &&
-          (bird.y < pipe.top || bird.y + bird.height > pipe.bottom)
+          plane.x < b.x + b.width &&
+          plane.x + plane.width > b.x &&
+          plane.y + plane.height > b.y
         ) {
-          crashSound.play();
-          crashed = true;
-          showExplosion = true;
-          bgm.pause();
-        }
-
-        if (!pipe.passed && pipe.x + pipe.width < bird.x) {
-          pipe.passed = true;
-          score++;
-          document.getElementById("scoreBoard").textContent = `Score: ${score} | High Score: ${Math.max(score, highScore)}`;
+          // Collision
+          gameOver = true;
+          gameStarted = false;
+          if (soundOn) crash.play();
+          explosionImg.style.left = plane.x + "px";
+          explosionImg.style.top = plane.y + "px";
+          explosionImg.style.display = "block";
+          gameOverText.style.display = "block";
+          document.getElementById("score").textContent = score;
+          highScore = Math.max(highScore, score);
+          document.getElementById("highScore").textContent = highScore;
         }
       });
 
-      // Remove old pipes
-      pipes = pipes.filter(pipe => pipe.x + pipe.width > 0);
-
-      // Add new pipe
-      if (pipes.length === 0 || pipes[pipes.length - 1].x < canvas.width - 200) {
-        let top = Math.random() * 200 + 50;
-        let gap = 150;
-        pipes.push({ x: canvas.width, width: 50, top: top, bottom: top + gap, passed: false });
-      }
-
-      if (bird.y + bird.height > canvas.height || bird.y < 0) {
-        crashed = true;
-        showExplosion = true;
-        bgm.pause();
-        crashSound.play();
-      }
+      // Scoring
+      score++;
     }
 
-    function draw() {
-      drawSky();
+    function render() {
+      drawBackground();
       drawBuildings();
-      drawPlane();
-      drawExplosion();
+      if (!gameOver) drawPlane();
     }
 
-    function gameLoop() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    function loop() {
       update();
-      draw();
-      requestAnimationFrame(gameLoop);
+      render();
+      requestAnimationFrame(loop);
     }
 
-    document.addEventListener("keydown", e => {
-      if (e.code === "Space") bird.velocity = lift;
+    document.addEventListener("keydown", () => {
+      if (gameStarted && !gameOver) plane.vy = -8;
     });
 
-    document.addEventListener("touchstart", () => {
-      bird.velocity = lift;
+    canvas.addEventListener("touchstart", () => {
+      if (gameStarted && !gameOver) plane.vy = -8;
     });
 
-    document.getElementById("startBtn").onclick = () => {
-      document.getElementById("startScreen").style.display = "none";
-      setTimeout(() => {
-        planeSelected = document.getElementById("planeSelect").value;
-        planeImg.src = planeSelected;
-        bgm.play();
-        gameLoop();
-      }, 5000);
+    startBtn.onclick = () => {
+      bgm.play();
+      startGame();
+      document.getElementById("ui").style.display = "none";
     };
 
-    document.getElementById("toggleSound").onclick = () => {
-      if (bgm.muted) {
-        bgm.muted = false;
-        crashSound.muted = false;
-      } else {
-        bgm.muted = true;
-        crashSound.muted = true;
-      }
+    soundBtn.onclick = () => {
+      soundOn = !soundOn;
+      bgm.muted = !soundOn;
+      crash.muted = !soundOn;
+      soundBtn.textContent = "Sound: " + (soundOn ? "ON" : "OFF");
     };
 
-    window.addEventListener("beforeunload", () => {
-      localStorage.setItem("highScore", Math.max(score, highScore));
-    });
+    exitBtn.onclick = () => {
+      alert("Thanks for playing!");
+    };
 
-    document.getElementById("finalScore").textContent = `Score: ${score} | High Score: ${Math.max(score, highScore)}`;
+    window.onload = () => {
+      loop();
+    };
   </script>
 </body>
 </html>
